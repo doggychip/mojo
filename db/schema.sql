@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS agents (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  user_prompt TEXT NOT NULL,
+  parsed_strategy TEXT NOT NULL,
+  config TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS agent_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  data TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS paper_trades (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  side TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  price REAL NOT NULL,
+  quantity REAL NOT NULL,
+  reason TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
