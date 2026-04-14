@@ -8,14 +8,17 @@ from .behavioral import BehavioralDetector
 from .bidding import Auction
 from .bloodline import Bloodline
 from .circuit_breaker import CircuitBreaker
+from .collision import CollisionEngine
 from .economy import CentralBank, RewardEngine, TaxBureau, Treasury
 from .inspection import Inspector
 from .judge import Judge
+from .lending import FuturesMarket, LoanManager
 from .llm import LLM
 from .memory import Memory
 from .models import AgentState, Task
 from .prompts import GOVERNOR_DECOMPOSE_PROMPT
 from .realms import RealmRouter
+from .relationships import RelationshipManager
 
 
 class Orchestrator:
@@ -46,6 +49,12 @@ class Orchestrator:
         self.inspector = Inspector(self.llm, stop_on_fail=True)
         self.circuit_breaker = CircuitBreaker()
         self.behavioral = BehavioralDetector()
+
+        # M5: Advanced economics
+        self.loan_manager = LoanManager(self.memory)
+        self.futures_market = FuturesMarket(self.memory)
+        self.relationships = RelationshipManager(self.memory)
+        self.collision_engine = CollisionEngine(self.llm, self.memory)
 
     def run(self, goal: str, max_rounds: int = 10) -> str:
         """Execute a goal through the full orchestration pipeline."""
@@ -212,6 +221,17 @@ class Orchestrator:
         winner.total_score += score
         self.memory.save_agent(winner)
 
+        # Settle any futures bets on this task
+        settled = self.futures_market.settle(task.task_id, score)
+        for s in settled:
+            status_icon = "📈" if s["status"] == "won" else "📉"
+            print(f"   {status_icon} Future {s['future_id']}: {s['status']} (payout: {s['payout']:.1f})")
+
+        # Check loan defaults
+        defaults = self.loan_manager.check_defaults(winner)
+        for d in defaults:
+            print(f"   🏦 Loan {d['loan_id']} defaulted!")
+
         return output
 
     def _lifecycle_check(self) -> None:
@@ -246,4 +266,16 @@ class Orchestrator:
                 "pending": len([t for t in tasks if t.status == "pending"]),
             },
             "economy": economy,
+            "loans": {
+                "active": len(self.memory.get_loans(status="active")),
+                "repaid": len(self.memory.get_loans(status="repaid")),
+                "defaulted": len(self.memory.get_loans(status="defaulted")),
+            },
+            "futures": {
+                "open": len(self.memory.get_futures(status="open")),
+                "won": len(self.memory.get_futures(status="won")),
+                "lost": len(self.memory.get_futures(status="lost")),
+            },
+            "relationships": self.relationships.get_network_summary(),
+            "collisions": len(self.memory.get_collisions(limit=100)),
         }

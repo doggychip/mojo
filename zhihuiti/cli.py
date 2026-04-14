@@ -138,5 +138,62 @@ def bloodline(ctx: click.Context, agent_id: str) -> None:
         click.echo(f"    Traits: {json.dumps(entry['merged_traits'])}")
 
 
+@main.command()
+@click.pass_context
+def loans(ctx: click.Context) -> None:
+    """Show active loans between agents."""
+    orch = ctx.obj["orchestrator"]
+    active = orch.memory.get_loans(status="active")
+    if not active:
+        click.echo("No active loans.")
+        return
+    click.echo(f"\n{'ID':<10} {'Lender':<10} {'Borrower':<10} {'Principal':<10} {'Rate':<8} {'Repaid':<10} {'Due':<6}")
+    click.echo("-" * 70)
+    for l in active:
+        click.echo(
+            f"{l['loan_id']:<10} {l['lender_id']:<10} {l['borrower_id']:<10} "
+            f"{l['principal']:<10.1f} {l['interest_rate']:<8.0%} "
+            f"{l['amount_repaid']:<10.1f} {l['due_after_tasks']:<6}"
+        )
+
+
+@main.command()
+@click.pass_context
+def futures(ctx: click.Context) -> None:
+    """Show futures contracts."""
+    orch = ctx.obj["orchestrator"]
+    all_futures = orch.memory.get_futures()
+    if not all_futures:
+        click.echo("No futures contracts.")
+        return
+    click.echo(f"\n{'ID':<10} {'Buyer':<10} {'Task':<10} {'Stake':<8} {'Pred':<8} {'Actual':<8} {'Status':<8}")
+    click.echo("-" * 65)
+    for f in all_futures:
+        actual = f"{f['actual_score']:.2f}" if f['actual_score'] is not None else "-"
+        click.echo(
+            f"{f['future_id']:<10} {f['buyer_id']:<10} {f['task_id']:<10} "
+            f"{f['stake']:<8.1f} {f['predicted_score']:<8.2f} {actual:<8} {f['status']:<8}"
+        )
+
+
+@main.command("rels")
+@click.option("--agent", "-a", default=None, help="Filter by agent ID")
+@click.pass_context
+def relationships(ctx: click.Context, agent: str) -> None:
+    """Show agent relationships."""
+    orch = ctx.obj["orchestrator"]
+    if agent:
+        rels = orch.memory.get_relationships(agent)
+    else:
+        rels = orch.memory.get_all_relationships()
+    if not rels:
+        click.echo("No relationships.")
+        return
+    click.echo(f"\n{'Agent A':<10} {'Type':<12} {'Agent B':<10} {'Strength':<10}")
+    click.echo("-" * 45)
+    for r in rels:
+        click.echo(f"{r['agent_a']:<10} {r['rel_type']:<12} {r['agent_b']:<10} {r['strength']:<10.2f}")
+
+
 if __name__ == "__main__":
     main()

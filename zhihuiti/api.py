@@ -143,4 +143,24 @@ def create_app(db_path: str = "zhihuiti.db") -> FastAPI:
     def get_bloodline(agent_id: str) -> list:
         return memory.get_lineage(agent_id)
 
+    # --- M5: Lending, Relationships, Collisions ---
+
+    @app.get("/api/loans")
+    def get_loans(agent_id: Optional[str] = Query(None), status: Optional[str] = Query(None)) -> list:
+        return memory.get_loans(agent_id=agent_id, status=status)
+
+    @app.get("/api/futures")
+    def get_futures(agent_id: Optional[str] = Query(None), status: Optional[str] = Query(None)) -> list:
+        return memory.get_futures(agent_id=agent_id, status=status)
+
+    @app.get("/api/relationships")
+    def get_relationships(agent_id: Optional[str] = Query(None)) -> list:
+        if agent_id:
+            return memory.get_relationships(agent_id)
+        return memory.get_all_relationships()
+
+    @app.get("/api/collisions")
+    def get_collisions(limit: int = Query(20)) -> list:
+        return memory.get_collisions(limit=limit)
+
     return app

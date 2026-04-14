@@ -70,6 +70,52 @@ class Memory:
                 key TEXT PRIMARY KEY,
                 value REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS loans (
+                loan_id TEXT PRIMARY KEY,
+                lender_id TEXT NOT NULL,
+                borrower_id TEXT NOT NULL,
+                principal REAL NOT NULL,
+                interest_rate REAL NOT NULL,
+                amount_repaid REAL DEFAULT 0.0,
+                status TEXT DEFAULT 'active',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                due_after_tasks INTEGER DEFAULT 5
+            );
+
+            CREATE TABLE IF NOT EXISTS futures (
+                future_id TEXT PRIMARY KEY,
+                buyer_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                stake REAL NOT NULL,
+                predicted_score REAL NOT NULL,
+                tolerance REAL DEFAULT 0.15,
+                actual_score REAL,
+                payout REAL DEFAULT 0.0,
+                status TEXT DEFAULT 'open',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS relationships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_a TEXT NOT NULL,
+                agent_b TEXT NOT NULL,
+                rel_type TEXT NOT NULL,
+                strength REAL DEFAULT 0.5,
+                metadata TEXT DEFAULT '{}',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(agent_a, agent_b, rel_type)
+            );
+
+            CREATE TABLE IF NOT EXISTS collisions (
+                collision_id TEXT PRIMARY KEY,
+                agent_ids TEXT NOT NULL,
+                inputs TEXT NOT NULL,
+                synthesis TEXT,
+                novelty_score REAL DEFAULT 0.0,
+                method TEXT DEFAULT 'dialectic',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         """)
         self.conn.commit()
 
@@ -257,6 +303,171 @@ class Memory:
         """Get all economy metrics."""
         rows = self.conn.execute("SELECT * FROM economy").fetchall()
         return {r["key"]: r["value"] for r in rows}
+
+    # --- Loans ---
+
+    def save_loan(self, loan: Dict) -> None:
+        """Insert or replace a loan."""
+        self.conn.execute(
+            """INSERT OR REPLACE INTO loans
+               (loan_id, lender_id, borrower_id, principal, interest_rate,
+                amount_repaid, status, due_after_tasks)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (
+                loan["loan_id"], loan["lender_id"], loan["borrower_id"],
+                loan["principal"], loan["interest_rate"],
+                loan.get("amount_repaid", 0.0), loan.get("status", "active"),
+                loan.get("due_after_tasks", 5),
+            ),
+        )
+        self.conn.commit()
+
+    def get_loans(self, agent_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
+        """Get loans, optionally filtered by agent or status."""
+        query = "SELECT * FROM loans WHERE 1=1"
+        params: list = []
+        if agent_id:
+            query += " AND (lender_id = ? OR borrower_id = ?)"
+            params.extend([agent_id, agent_id])
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        rows = self.conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_loan(self, loan_id: str, updates: Dict) -> None:
+        """Update loan fields."""
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [loan_id]
+        self.conn.execute(f"UPDATE loans SET {sets} WHERE loan_id = ?", vals)
+        self.conn.commit()
+
+    # --- Futures ---
+
+    def save_future(self, future: Dict) -> None:
+        """Insert or replace a futures contract."""
+        self.conn.execute(
+            """INSERT OR REPLACE INTO futures
+               (future_id, buyer_id, task_id, stake, predicted_score,
+                tolerance, actual_score, payout, status)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                future["future_id"], future["buyer_id"], future["task_id"],
+                future["stake"], future["predicted_score"],
+                future.get("tolerance", 0.15),
+                future.get("actual_score"), future.get("payout", 0.0),
+                future.get("status", "open"),
+            ),
+        )
+        self.conn.commit()
+
+    def get_futures(self, agent_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
+        """Get futures contracts."""
+        query = "SELECT * FROM futures WHERE 1=1"
+        params: list = []
+        if agent_id:
+            query += " AND buyer_id = ?"
+            params.append(agent_id)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        rows = self.conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_futures_for_task(self, task_id: str) -> List[Dict]:
+        """Get all open futures for a task."""
+        rows = self.conn.execute(
+            "SELECT * FROM futures WHERE task_id = ? AND status = 'open'", (task_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_future(self, future_id: str, updates: Dict) -> None:
+        """Update futures contract fields."""
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [future_id]
+        self.conn.execute(f"UPDATE futures SET {sets} WHERE future_id = ?", vals)
+        self.conn.commit()
+
+    # --- Relationships ---
+
+    def save_relationship(self, agent_a: str, agent_b: str, rel_type: str,
+                          strength: float = 0.5, metadata: Optional[Dict] = None) -> None:
+        """Create or update a relationship."""
+        self.conn.execute(
+            """INSERT OR REPLACE INTO relationships
+               (agent_a, agent_b, rel_type, strength, metadata)
+               VALUES (?,?,?,?,?)""",
+            (agent_a, agent_b, rel_type, strength, json.dumps(metadata or {})),
+        )
+        self.conn.commit()
+
+    def get_relationships(self, agent_id: str, rel_type: Optional[str] = None) -> List[Dict]:
+        """Get all relationships for an agent."""
+        query = "SELECT * FROM relationships WHERE (agent_a = ? OR agent_b = ?)"
+        params: list = [agent_id, agent_id]
+        if rel_type:
+            query += " AND rel_type = ?"
+            params.append(rel_type)
+        rows = self.conn.execute(query, params).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["metadata"] = json.loads(d["metadata"])
+            result.append(d)
+        return result
+
+    def get_all_relationships(self) -> List[Dict]:
+        """Get all relationships."""
+        rows = self.conn.execute("SELECT * FROM relationships").fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["metadata"] = json.loads(d["metadata"])
+            result.append(d)
+        return result
+
+    def update_relationship_strength(self, agent_a: str, agent_b: str,
+                                     rel_type: str, delta: float) -> None:
+        """Adjust relationship strength by delta, clamped to [0, 1]."""
+        self.conn.execute(
+            """UPDATE relationships
+               SET strength = MIN(1.0, MAX(0.0, strength + ?))
+               WHERE agent_a = ? AND agent_b = ? AND rel_type = ?""",
+            (delta, agent_a, agent_b, rel_type),
+        )
+        self.conn.commit()
+
+    # --- Collisions ---
+
+    def save_collision(self, collision: Dict) -> None:
+        """Save a collision record."""
+        self.conn.execute(
+            """INSERT OR REPLACE INTO collisions
+               (collision_id, agent_ids, inputs, synthesis, novelty_score, method)
+               VALUES (?,?,?,?,?,?)""",
+            (
+                collision["collision_id"],
+                json.dumps(collision["agent_ids"]),
+                json.dumps(collision["inputs"]),
+                collision.get("synthesis", ""),
+                collision.get("novelty_score", 0.0),
+                collision.get("method", "dialectic"),
+            ),
+        )
+        self.conn.commit()
+
+    def get_collisions(self, limit: int = 20) -> List[Dict]:
+        """Get recent collisions."""
+        rows = self.conn.execute(
+            "SELECT * FROM collisions ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["agent_ids"] = json.loads(d["agent_ids"])
+            d["inputs"] = json.loads(d["inputs"])
+            result.append(d)
+        return result
 
     def close(self) -> None:
         """Close the database connection."""
