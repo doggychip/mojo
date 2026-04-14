@@ -19,11 +19,16 @@ def main(ctx: click.Context) -> None:
 @main.command()
 @click.argument("goal")
 @click.option("--rounds", "-r", default=10, help="Max rounds")
+@click.option("--parallel", "-p", is_flag=True, help="Run tasks in parallel")
+@click.option("--workers", "-w", default=5, help="Max parallel workers")
 @click.pass_context
-def run(ctx: click.Context, goal: str, rounds: int) -> None:
+def run(ctx: click.Context, goal: str, rounds: int, parallel: bool, workers: int) -> None:
     """Run a goal through the orchestration pipeline."""
     orch = ctx.obj["orchestrator"]
-    orch.run(goal, max_rounds=rounds)
+    if parallel:
+        orch.run_parallel(goal, max_rounds=rounds, max_workers=workers)
+    else:
+        orch.run(goal, max_rounds=rounds)
 
 
 @main.command()

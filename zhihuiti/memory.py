@@ -14,6 +14,9 @@ class Memory:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
+        self._lock = __import__("threading").Lock()
         self._create_tables()
 
     def _create_tables(self) -> None:
@@ -124,21 +127,22 @@ class Memory:
     def save_agent(self, state: AgentState) -> None:
         """Insert or replace an agent state."""
         c = state.config
-        self.conn.execute(
-            """INSERT OR REPLACE INTO agents
-               (agent_id, role, name, system_prompt, budget, depth, gene_traits,
-                tokens, total_score, tasks_completed, tasks_failed,
-                realm, alive, generation, parent_ids)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                c.agent_id, c.role, c.name, c.system_prompt, c.budget, c.depth,
-                json.dumps(c.gene_traits),
-                state.tokens, state.total_score, state.tasks_completed,
-                state.tasks_failed, state.realm, int(state.alive),
-                state.generation, json.dumps(state.parent_ids),
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO agents
+                   (agent_id, role, name, system_prompt, budget, depth, gene_traits,
+                    tokens, total_score, tasks_completed, tasks_failed,
+                    realm, alive, generation, parent_ids)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    c.agent_id, c.role, c.name, c.system_prompt, c.budget, c.depth,
+                    json.dumps(c.gene_traits),
+                    state.tokens, state.total_score, state.tasks_completed,
+                    state.tasks_failed, state.realm, int(state.alive),
+                    state.generation, json.dumps(state.parent_ids),
+                ),
+            )
+            self.conn.commit()
 
     def load_agent(self, agent_id: str) -> Optional[AgentState]:
         """Load an agent by ID, or None if not found."""
@@ -192,16 +196,17 @@ class Memory:
 
     def save_task(self, task: Task) -> None:
         """Insert or replace a task."""
-        self.conn.execute(
-            """INSERT OR REPLACE INTO tasks
-               (task_id, description, goal, context, assigned_agent, status, result, score, realm)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (
-                task.task_id, task.description, task.goal, task.context,
-                task.assigned_agent, task.status, task.result, task.score, task.realm,
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO tasks
+                   (task_id, description, goal, context, assigned_agent, status, result, score, realm)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    task.task_id, task.description, task.goal, task.context,
+                    task.assigned_agent, task.status, task.result, task.score, task.realm,
+                ),
+            )
+            self.conn.commit()
 
     def get_agent_tasks(self, agent_id: str) -> List[Task]:
         """Get all tasks assigned to an agent."""
@@ -232,11 +237,12 @@ class Memory:
 
     def record_transaction(self, from_id: str, to_id: str, amount: float, reason: str) -> None:
         """Record a token transfer."""
-        self.conn.execute(
-            "INSERT INTO transactions (from_id, to_id, amount, reason) VALUES (?,?,?,?)",
-            (from_id, to_id, amount, reason),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO transactions (from_id, to_id, amount, reason) VALUES (?,?,?,?)",
+                (from_id, to_id, amount, reason),
+            )
+            self.conn.commit()
 
     def get_transactions(self, agent_id: Optional[str] = None) -> List[Dict]:
         """Get transaction history, optionally filtered by agent."""
@@ -253,11 +259,12 @@ class Memory:
 
     def save_bloodline(self, child_id: str, parent_ids: List[str], merged_traits: Dict, generation: int = 1) -> None:
         """Record a bloodline entry."""
-        self.conn.execute(
-            "INSERT INTO bloodline (child_id, parent_ids, merged_traits, generation) VALUES (?,?,?,?)",
-            (child_id, json.dumps(parent_ids), json.dumps(merged_traits), generation),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO bloodline (child_id, parent_ids, merged_traits, generation) VALUES (?,?,?,?)",
+                (child_id, json.dumps(parent_ids), json.dumps(merged_traits), generation),
+            )
+            self.conn.commit()
 
     def get_lineage(self, agent_id: str, max_generations: int = 7) -> List[Dict]:
         """Trace lineage up to max_generations back."""
@@ -287,10 +294,11 @@ class Memory:
 
     def set_economy(self, key: str, value: float) -> None:
         """Set an economy metric."""
-        self.conn.execute(
-            "INSERT OR REPLACE INTO economy (key, value) VALUES (?,?)", (key, value)
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO economy (key, value) VALUES (?,?)", (key, value)
+            )
+            self.conn.commit()
 
     def get_economy(self, key: str, default: float = 0.0) -> float:
         """Get an economy metric."""
@@ -308,19 +316,20 @@ class Memory:
 
     def save_loan(self, loan: Dict) -> None:
         """Insert or replace a loan."""
-        self.conn.execute(
-            """INSERT OR REPLACE INTO loans
-               (loan_id, lender_id, borrower_id, principal, interest_rate,
-                amount_repaid, status, due_after_tasks)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            (
-                loan["loan_id"], loan["lender_id"], loan["borrower_id"],
-                loan["principal"], loan["interest_rate"],
-                loan.get("amount_repaid", 0.0), loan.get("status", "active"),
-                loan.get("due_after_tasks", 5),
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO loans
+                   (loan_id, lender_id, borrower_id, principal, interest_rate,
+                    amount_repaid, status, due_after_tasks)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    loan["loan_id"], loan["lender_id"], loan["borrower_id"],
+                    loan["principal"], loan["interest_rate"],
+                    loan.get("amount_repaid", 0.0), loan.get("status", "active"),
+                    loan.get("due_after_tasks", 5),
+                ),
+            )
+            self.conn.commit()
 
     def get_loans(self, agent_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
         """Get loans, optionally filtered by agent or status."""
@@ -339,27 +348,29 @@ class Memory:
         """Update loan fields."""
         sets = ", ".join(f"{k} = ?" for k in updates)
         vals = list(updates.values()) + [loan_id]
-        self.conn.execute(f"UPDATE loans SET {sets} WHERE loan_id = ?", vals)
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(f"UPDATE loans SET {sets} WHERE loan_id = ?", vals)
+            self.conn.commit()
 
     # --- Futures ---
 
     def save_future(self, future: Dict) -> None:
         """Insert or replace a futures contract."""
-        self.conn.execute(
-            """INSERT OR REPLACE INTO futures
-               (future_id, buyer_id, task_id, stake, predicted_score,
-                tolerance, actual_score, payout, status)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (
-                future["future_id"], future["buyer_id"], future["task_id"],
-                future["stake"], future["predicted_score"],
-                future.get("tolerance", 0.15),
-                future.get("actual_score"), future.get("payout", 0.0),
-                future.get("status", "open"),
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO futures
+                   (future_id, buyer_id, task_id, stake, predicted_score,
+                    tolerance, actual_score, payout, status)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    future["future_id"], future["buyer_id"], future["task_id"],
+                    future["stake"], future["predicted_score"],
+                    future.get("tolerance", 0.15),
+                    future.get("actual_score"), future.get("payout", 0.0),
+                    future.get("status", "open"),
+                ),
+            )
+            self.conn.commit()
 
     def get_futures(self, agent_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
         """Get futures contracts."""
@@ -385,21 +396,23 @@ class Memory:
         """Update futures contract fields."""
         sets = ", ".join(f"{k} = ?" for k in updates)
         vals = list(updates.values()) + [future_id]
-        self.conn.execute(f"UPDATE futures SET {sets} WHERE future_id = ?", vals)
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(f"UPDATE futures SET {sets} WHERE future_id = ?", vals)
+            self.conn.commit()
 
     # --- Relationships ---
 
     def save_relationship(self, agent_a: str, agent_b: str, rel_type: str,
                           strength: float = 0.5, metadata: Optional[Dict] = None) -> None:
         """Create or update a relationship."""
-        self.conn.execute(
-            """INSERT OR REPLACE INTO relationships
-               (agent_a, agent_b, rel_type, strength, metadata)
-               VALUES (?,?,?,?,?)""",
-            (agent_a, agent_b, rel_type, strength, json.dumps(metadata or {})),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO relationships
+                   (agent_a, agent_b, rel_type, strength, metadata)
+                   VALUES (?,?,?,?,?)""",
+                (agent_a, agent_b, rel_type, strength, json.dumps(metadata or {})),
+            )
+            self.conn.commit()
 
     def get_relationships(self, agent_id: str, rel_type: Optional[str] = None) -> List[Dict]:
         """Get all relationships for an agent."""
@@ -429,32 +442,34 @@ class Memory:
     def update_relationship_strength(self, agent_a: str, agent_b: str,
                                      rel_type: str, delta: float) -> None:
         """Adjust relationship strength by delta, clamped to [0, 1]."""
-        self.conn.execute(
-            """UPDATE relationships
-               SET strength = MIN(1.0, MAX(0.0, strength + ?))
-               WHERE agent_a = ? AND agent_b = ? AND rel_type = ?""",
-            (delta, agent_a, agent_b, rel_type),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """UPDATE relationships
+                   SET strength = MIN(1.0, MAX(0.0, strength + ?))
+                   WHERE agent_a = ? AND agent_b = ? AND rel_type = ?""",
+                (delta, agent_a, agent_b, rel_type),
+            )
+            self.conn.commit()
 
     # --- Collisions ---
 
     def save_collision(self, collision: Dict) -> None:
         """Save a collision record."""
-        self.conn.execute(
-            """INSERT OR REPLACE INTO collisions
-               (collision_id, agent_ids, inputs, synthesis, novelty_score, method)
-               VALUES (?,?,?,?,?,?)""",
-            (
-                collision["collision_id"],
-                json.dumps(collision["agent_ids"]),
-                json.dumps(collision["inputs"]),
-                collision.get("synthesis", ""),
-                collision.get("novelty_score", 0.0),
-                collision.get("method", "dialectic"),
-            ),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO collisions
+                   (collision_id, agent_ids, inputs, synthesis, novelty_score, method)
+                   VALUES (?,?,?,?,?,?)""",
+                (
+                    collision["collision_id"],
+                    json.dumps(collision["agent_ids"]),
+                    json.dumps(collision["inputs"]),
+                    collision.get("synthesis", ""),
+                    collision.get("novelty_score", 0.0),
+                    collision.get("method", "dialectic"),
+                ),
+            )
+            self.conn.commit()
 
     def get_collisions(self, limit: int = 20) -> List[Dict]:
         """Get recent collisions."""

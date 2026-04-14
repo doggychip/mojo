@@ -17,6 +17,7 @@ from .llm import LLM
 from .memory import Memory
 from .models import AgentState, Task
 from .prompts import GOVERNOR_DECOMPOSE_PROMPT
+from .parallel import ParallelExecutor, group_by_dependency
 from .realms import RealmRouter
 from .relationships import RelationshipManager
 
@@ -95,6 +96,73 @@ class Orchestrator:
         final = self.agents.synthesize(results)
 
         # 4. Lifecycle checks (cull/promote)
+        self._lifecycle_check()
+
+        print(f"\n{'='*60}")
+        print("  FINAL OUTPUT")
+        print(f"{'='*60}\n")
+        print(final)
+
+        return final
+
+    def run_parallel(self, goal: str, max_rounds: int = 10, max_workers: int = 5) -> str:
+        """Execute a goal with parallel task processing within each realm batch."""
+        print(f"\n{'='*60}")
+        print(f"  智慧体 ORCHESTRATOR (PARALLEL)")
+        print(f"  Goal: {goal}")
+        print(f"  Workers: {max_workers}")
+        print(f"{'='*60}\n")
+
+        # 1. Decompose goal into tasks
+        tasks = self._decompose_goal(goal)
+        if not tasks:
+            return "[Error] Failed to decompose goal into tasks."
+
+        print(f"📋 Decomposed into {len(tasks)} tasks:\n")
+        for i, t in enumerate(tasks, 1):
+            print(f"   {i}. [{t.realm}] {t.description}")
+
+        # 2. Group into parallel batches by realm dependency
+        batches = group_by_dependency(tasks)
+        print(f"\n⚡ Grouped into {len(batches)} parallel batches")
+
+        executor = ParallelExecutor(max_workers=max_workers)
+        all_results: List[str] = []
+        task_count = 0
+
+        for batch_num, batch in enumerate(batches, 1):
+            if task_count >= max_rounds:
+                print(f"\n⚠️  Max rounds ({max_rounds}) reached. Stopping.")
+                break
+
+            remaining = max_rounds - task_count
+            batch = batch[:remaining]
+
+            print(f"\n{'─'*40}")
+            print(f"  Batch {batch_num}: {len(batch)} tasks ({batch[0].realm})")
+            print(f"{'─'*40}")
+
+            # Run all tasks in this batch concurrently
+            batch_results = executor.execute_batch(batch, self._process_task)
+
+            for tr in batch_results:
+                task_count += 1
+                status_icon = "✅" if tr.success else "❌"
+                print(f"   {status_icon} {tr.task.description[:50]}... ({tr.duration_s:.1f}s)")
+                if tr.output:
+                    all_results.append(tr.output)
+
+        # 3. Synthesize
+        if not all_results:
+            return "[Error] No tasks completed successfully."
+
+        print(f"\n{'='*60}")
+        print("  SYNTHESIZING RESULTS")
+        print(f"{'='*60}\n")
+
+        final = self.agents.synthesize(all_results)
+
+        # 4. Lifecycle checks
         self._lifecycle_check()
 
         print(f"\n{'='*60}")

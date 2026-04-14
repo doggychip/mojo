@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import threading
 
 import pytest
 
@@ -11,7 +12,7 @@ from zhihuiti.memory import Memory
 
 
 class MockLLM(LLM):
-    """LLM mock that returns canned responses without making API calls."""
+    """Thread-safe LLM mock that returns canned responses without making API calls."""
 
     def __init__(self, responses=None):
         self.provider = "mock"
@@ -20,17 +21,19 @@ class MockLLM(LLM):
         self.responses = responses or []
         self.call_log = []
         self._call_index = 0
+        self._lock = threading.Lock()
 
     def call(self, system_prompt: str, user_message: str, temperature: float = 0.7) -> str:
-        self.call_log.append({
-            "system_prompt": system_prompt,
-            "user_message": user_message,
-            "temperature": temperature,
-        })
-        if self._call_index < len(self.responses):
-            resp = self.responses[self._call_index]
-            self._call_index += 1
-            return resp
+        with self._lock:
+            self.call_log.append({
+                "system_prompt": system_prompt,
+                "user_message": user_message,
+                "temperature": temperature,
+            })
+            if self._call_index < len(self.responses):
+                resp = self.responses[self._call_index]
+                self._call_index += 1
+                return resp
         return "Mock LLM response: task completed successfully with detailed analysis."
 
     def call_json(self, system_prompt: str, user_message: str, temperature: float = 0.3) -> dict:
