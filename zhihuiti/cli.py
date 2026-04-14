@@ -5,6 +5,7 @@ import json
 import click
 
 from .orchestrator import Orchestrator
+from .trading import TradingWorkflow
 
 
 @click.group()
@@ -85,6 +86,25 @@ def history(ctx: click.Context) -> None:
     click.echo("-" * 80)
     for t in tasks:
         click.echo(f"{t.task_id:<10} {t.status:<12} {t.score:<8.2f} {t.realm:<10} {t.description[:40]}")
+
+
+@main.command()
+@click.argument("ticker")
+@click.option("--signals", "-s", default=5, help="Number of signals to discover")
+@click.option("--top", "-t", default=3, help="Top N signals to generate Pine Script for")
+@click.pass_context
+def trade(ctx: click.Context, ticker: str, signals: int, top: int) -> None:
+    """Run quantitative trading signal workflow for a ticker."""
+    orch = ctx.obj["orchestrator"]
+    workflow = TradingWorkflow(
+        llm=orch.llm,
+        memory=orch.memory,
+        agents=orch.agents,
+        reward_engine=orch.reward_engine,
+        judge=orch.judge,
+    )
+    result = workflow.run(ticker.upper(), num_signals=signals, top_n=top)
+    click.echo(f"\n✅ Found {len(result.signals)} signals for {result.ticker}")
 
 
 @main.command()
