@@ -43,17 +43,34 @@ class Treasury:
 
     def pay(self, amount: float, to_id: str, reason: str) -> bool:
         """Pay from treasury. Returns False if insufficient funds."""
-        bal = self.balance
-        if amount > bal:
-            return False
-        self.memory.set_economy("treasury_balance", bal - amount)
-        self.memory.record_transaction("treasury", to_id, amount, reason)
+        with self.memory._lock:
+            bal = self.memory.get_economy("treasury_balance")
+            if amount > bal:
+                return False
+            self.memory.conn.execute(
+                "INSERT OR REPLACE INTO economy (key, value) VALUES (?,?)",
+                ("treasury_balance", bal - amount),
+            )
+            self.memory.conn.execute(
+                "INSERT INTO transactions (from_id, to_id, amount, reason) VALUES (?,?,?,?)",
+                ("treasury", to_id, amount, reason),
+            )
+            self.memory.conn.commit()
         return True
 
     def receive(self, amount: float, from_id: str, reason: str) -> None:
         """Receive funds into treasury."""
-        self.memory.set_economy("treasury_balance", self.balance + amount)
-        self.memory.record_transaction(from_id, "treasury", amount, reason)
+        with self.memory._lock:
+            bal = self.memory.get_economy("treasury_balance")
+            self.memory.conn.execute(
+                "INSERT OR REPLACE INTO economy (key, value) VALUES (?,?)",
+                ("treasury_balance", bal + amount),
+            )
+            self.memory.conn.execute(
+                "INSERT INTO transactions (from_id, to_id, amount, reason) VALUES (?,?,?,?)",
+                (from_id, "treasury", amount, reason),
+            )
+            self.memory.conn.commit()
 
 
 class TaxBureau:
@@ -69,8 +86,13 @@ class TaxBureau:
         tax = amount * rate
         agent.tokens -= tax
         self.treasury.receive(tax, agent.config.agent_id, f"realm_tax_{agent.realm}")
-        total = self.memory.get_economy("total_tax_collected")
-        self.memory.set_economy("total_tax_collected", total + tax)
+        with self.memory._lock:
+            total = self.memory.get_economy("total_tax_collected")
+            self.memory.conn.execute(
+                "INSERT OR REPLACE INTO economy (key, value) VALUES (?,?)",
+                ("total_tax_collected", total + tax),
+            )
+            self.memory.conn.commit()
         return tax
 
 

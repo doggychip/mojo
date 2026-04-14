@@ -1,7 +1,10 @@
 """Main orchestration loop — wires everything together."""
 
+import os
 import uuid
 from typing import Dict, List, Optional
+
+DEFAULT_DB = os.environ.get("ZHIHUITI_DB", "zhihuiti.db")
 
 from .agents import AgentManager
 from .behavioral import BehavioralDetector
@@ -29,7 +32,7 @@ class Orchestrator:
         self,
         llm: Optional[LLM] = None,
         memory: Optional[Memory] = None,
-        db_path: str = "zhihuiti.db",
+        db_path: str = DEFAULT_DB,
     ) -> None:
         self.llm = llm or LLM()
         self.memory = memory or Memory(db_path)

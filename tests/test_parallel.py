@@ -1,8 +1,11 @@
 """Tests for parallel task execution."""
 
 import json
+import sys
 import time
 from typing import Optional
+
+import pytest
 
 from tests.conftest import MockLLM
 from zhihuiti.models import Task
@@ -125,6 +128,10 @@ def test_parallel_actually_concurrent():
     assert elapsed < 0.25, f"Took {elapsed:.2f}s — not running in parallel"
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10),
+    reason="Python 3.9 SQLite has segfault with concurrent threaded writes"
+)
 def test_parallel_run_end_to_end(memory):
     """Full orchestrator.run_parallel with mocked LLM."""
     responses = [

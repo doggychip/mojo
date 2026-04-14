@@ -14,7 +14,7 @@ from .realms import REALM_CONFIG, RealmRouter
 DASHBOARD_DIR = Path(__file__).parent / "dashboard"
 
 
-def create_app(db_path: str = "zhihuiti.db") -> FastAPI:
+def create_app(db_path: str = os.environ.get("ZHIHUITI_DB", "zhihuiti.db")) -> FastAPI:
     """Create and configure the FastAPI app."""
     app = FastAPI(title="智慧体 Dashboard", version="0.2.0")
     memory = Memory(db_path)
