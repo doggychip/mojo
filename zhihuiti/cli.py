@@ -113,7 +113,7 @@ def trade(ctx: click.Context, ticker: str, signals: int, top: int) -> None:
 
 
 @main.command()
-@click.option("--port", "-p", default=8420, help="Port to serve on")
+@click.option("--port", "-p", default=8080, help="Port to serve on")
 @click.option("--host", "-h", default="127.0.0.1", help="Host to bind to")
 def dashboard(port: int, host: str) -> None:
     """Launch the web dashboard."""
