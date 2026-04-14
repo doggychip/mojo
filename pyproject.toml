@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zhihuiti"
+version = "0.2.0"
+description = "智慧体 — autonomous multi-agent orchestration with token economics"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28",
+    "click>=8.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+zhihuiti = "zhihuiti.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["zhihuiti*"]
