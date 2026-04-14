@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧体 Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #141a26;
+    --border: #1e2a3a;
+    --text: #e0e6ed;
+    --dim: #6b7a8d;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header h1 span { color: var(--accent); }
+  .header .meta { color: var(--dim); font-size: 12px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    padding: 20px 24px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--dim);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--dim); }
+  .stat-value { font-weight: 600; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.accent { color: var(--accent); }
+
+  .big-number {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .big-number .item {
+    text-align: center;
+    flex: 1;
+    min-width: 80px;
+  }
+  .big-number .num {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .big-number .label {
+    font-size: 11px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Realm bars */
+  .realm-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .realm-name {
+    width: 70px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .realm-fill {
+    flex: 1;
+    height: 20px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .realm-fill-inner {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .realm-fill-inner.research { background: var(--accent); }
+  .realm-fill-inner.execution { background: var(--green); }
+  .realm-fill-inner.nexus { background: var(--purple); }
+  .realm-count {
+    width: 30px;
+    text-align: right;
+    font-weight: 600;
+  }
+
+  /* Agent table */
+  .agent-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .agent-table th {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .agent-table td {
+    padding: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent-table tr:hover td { background: rgba(59, 130, 246, 0.05); }
+  .role-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .role-researcher { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .role-analyst { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .role-coder { background: rgba(34,197,94,0.15); color: var(--green); }
+  .role-writer { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .role-trader { background: rgba(239,68,68,0.15); color: var(--red); }
+  .role-auditor { background: rgba(107,122,141,0.15); color: var(--dim); }
+  .role-governor, .role-strategist, .role-architect {
+    background: rgba(168,85,247,0.15); color: var(--purple);
+  }
+  .role-judge { background: rgba(245,158,11,0.15); color: var(--amber); }
+
+  .score-bar {
+    width: 60px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .score-bar-inner {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  /* Task list */
+  .task-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .task-item:last-child { border-bottom: none; }
+  .task-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .task-status.completed { background: var(--green); }
+  .task-status.failed { background: var(--red); }
+  .task-status.running { background: var(--amber); animation: pulse 1.5s infinite; }
+  .task-status.pending { background: var(--dim); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .task-desc {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .task-score { width: 40px; text-align: right; font-weight: 600; }
+  .task-realm {
+    font-size: 10px;
+    color: var(--dim);
+    width: 60px;
+    text-align: right;
+  }
+
+  /* Full-width cards */
+  .full-width { grid-column: 1 / -1; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+  .tab {
+    padding: 6px 12px;
+    background: var(--border);
+    border: none;
+    color: var(--dim);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); color: #fff; }
+
+  .empty { color: var(--dim); font-style: italic; padding: 20px; text-align: center; }
+
+  /* Transaction log */
+  .tx-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 11px;
+  }
+  .tx-amount { font-weight: 600; }
+  .tx-reason { color: var(--dim); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>智慧体</span> Dashboard</h1>
+  <div class="meta">
+    <span id="agent-count">-</span> agents |
+    <span id="task-count">-</span> tasks |
+    Auto-refresh: <span id="refresh-timer">5</span>s
+  </div>
+</div>
+
+<div class="grid">
+  <!-- Economy overview -->
+  <div class="card">
+    <h2>Economy</h2>
+    <div class="big-number">
+      <div class="item">
+        <div class="num accent" id="money-supply">-</div>
+        <div class="label">Supply</div>
+      </div>
+      <div class="item">
+        <div class="num green" id="treasury-bal">-</div>
+        <div class="label">Treasury</div>
+      </div>
+      <div class="item">
+        <div class="num amber" id="tax-collected">-</div>
+        <div class="label">Tax</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task summary -->
+  <div class="card">
+    <h2>Tasks</h2>
+    <div class="big-number">
+      <div class="item">
+        <div class="num green" id="tasks-done">0</div>
+        <div class="label">Done</div>
+      </div>
+      <div class="item">
+        <div class="num amber" id="tasks-running">0</div>
+        <div class="label">Running</div>
+      </div>
+      <div class="item">
+        <div class="num red" id="tasks-failed">0</div>
+        <div class="label">Failed</div>
+      </div>
+      <div class="item">
+        <div class="num" id="tasks-pending">0</div>
+        <div class="label">Pending</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Realm distribution -->
+  <div class="card">
+    <h2>Realms</h2>
+    <div id="realm-bars"></div>
+  </div>
+
+  <!-- Agent table (full-width) -->
+  <div class="card full-width">
+    <h2>Agents</h2>
+    <div class="tabs" id="agent-tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="research">Research</button>
+      <button class="tab" data-filter="execution">Execution</button>
+      <button class="tab" data-filter="nexus">Nexus</button>
+      <button class="tab" data-filter="dead">Dead</button>
+    </div>
+    <div id="agent-table-wrap"></div>
+  </div>
+
+  <!-- Task feed -->
+  <div class="card full-width">
+    <h2>Recent Tasks</h2>
+    <div id="task-feed"></div>
+  </div>
+
+  <!-- Transaction log -->
+  <div class="card">
+    <h2>Recent Transactions</h2>
+    <div id="tx-log"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentFilter = 'all';
+let refreshInterval = 5000;
+let countdown = 5;
+
+// --- Fetch helpers ---
+async function fetchJSON(path) {
+  const res = await fetch(API + path);
+  return res.json();
+}
+
+// --- Render functions ---
+function renderEconomy(eco) {
+  const m = eco.metrics || {};
+  document.getElementById('money-supply').textContent = fmt(m.money_supply || 0);
+  document.getElementById('treasury-bal').textContent = fmt(m.treasury_balance || 0);
+  document.getElementById('tax-collected').textContent = fmt(m.total_tax_collected || 0);
+
+  const txLog = document.getElementById('tx-log');
+  const txns = (eco.recent_transactions || []).slice(-10).reverse();
+  if (!txns.length) {
+    txLog.innerHTML = '<div class="empty">No transactions yet</div>';
+    return;
+  }
+  txLog.innerHTML = txns.map(t =>
+    `<div class="tx-item">
+      <span>${t.from_id || '?'} &rarr; ${t.to_id || '?'}</span>
+      <span class="tx-amount">${(+t.amount).toFixed(1)}</span>
+      <span class="tx-reason">${t.reason || ''}</span>
+    </div>`
+  ).join('');
+}
+
+function renderStatus(s) {
+  document.getElementById('agent-count').textContent = s.agents.alive;
+  document.getElementById('task-count').textContent = s.tasks.total;
+  document.getElementById('tasks-done').textContent = s.tasks.completed;
+  document.getElementById('tasks-running').textContent = s.tasks.running || 0;
+  document.getElementById('tasks-failed').textContent = s.tasks.failed;
+  document.getElementById('tasks-pending').textContent = s.tasks.pending;
+}
+
+function renderRealms(realms) {
+  const wrap = document.getElementById('realm-bars');
+  const maxAgents = Math.max(1, ...Object.values(realms).map(r => r.agent_count));
+  wrap.innerHTML = Object.entries(realms).map(([name, r]) => {
+    const pct = (r.agent_count / maxAgents) * 100;
+    const zh = r.name_zh || name;
+    return `
+      <div class="realm-bar">
+        <span class="realm-name">${zh}</span>
+        <div class="realm-fill">
+          <div class="realm-fill-inner ${name}" style="width:${pct}%"></div>
+        </div>
+        <span class="realm-count">${r.agent_count}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);padding:0 0 8px 78px;">
+        <span>tax ${(r.tax_rate*100).toFixed(0)}%</span>
+        <span>avg score ${(r.avg_score||0).toFixed(2)}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderAgents(agents) {
+  const wrap = document.getElementById('agent-table-wrap');
+  let filtered = agents;
+  if (currentFilter === 'dead') {
+    filtered = agents.filter(a => !a.alive);
+  } else if (currentFilter !== 'all') {
+    filtered = agents.filter(a => a.alive && a.realm === currentFilter);
+  } else {
+    filtered = agents.filter(a => a.alive);
+  }
+
+  if (!filtered.length) {
+    wrap.innerHTML = '<div class="empty">No agents</div>';
+    return;
+  }
+
+  const scoreColor = s => s >= 0.7 ? 'var(--green)' : s >= 0.4 ? 'var(--amber)' : 'var(--red)';
+
+  wrap.innerHTML = `
+    <table class="agent-table">
+      <thead><tr>
+        <th>Name</th><th>Role</th><th>Realm</th><th>Tokens</th><th>Score</th><th>Tasks</th><th>Gen</th>
+      </tr></thead>
+      <tbody>
+        ${filtered.map(a => `
+          <tr>
+            <td>${a.name}</td>
+            <td><span class="role-badge role-${a.role}">${a.role}</span></td>
+            <td>${a.realm}</td>
+            <td>${a.tokens.toFixed(1)}</td>
+            <td>
+              <span class="score-bar"><span class="score-bar-inner" style="width:${a.average_score*100}%;background:${scoreColor(a.average_score)}"></span></span>
+              ${a.average_score.toFixed(2)}
+            </td>
+            <td>${a.tasks_completed}<span style="color:var(--dim)">/${a.tasks_completed + a.tasks_failed}</span></td>
+            <td>${a.generation}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderTasks(tasks) {
+  const wrap = document.getElementById('task-feed');
+  const recent = tasks.slice(-15).reverse();
+  if (!recent.length) {
+    wrap.innerHTML = '<div class="empty">No tasks yet. Run: zhihuiti run "your goal"</div>';
+    return;
+  }
+  wrap.innerHTML = recent.map(t => `
+    <div class="task-item">
+      <div class="task-status ${t.status}"></div>
+      <div class="task-desc" title="${esc(t.description)}">${esc(t.description)}</div>
+      <div class="task-realm">${t.realm}</div>
+      <div class="task-score" style="color:${t.score >= 0.7 ? 'var(--green)' : t.score > 0 ? 'var(--amber)' : 'var(--dim)'}">${t.score > 0 ? t.score.toFixed(2) : '-'}</div>
+    </div>
+  `).join('');
+}
+
+// --- Helpers ---
+function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1) + 'k' : n.toFixed(0); }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+// --- Tab handling ---
+document.getElementById('agent-tabs').addEventListener('click', e => {
+  if (!e.target.classList.contains('tab')) return;
+  document.querySelectorAll('#agent-tabs .tab').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  currentFilter = e.target.dataset.filter;
+  refresh();
+});
+
+// --- Main refresh loop ---
+let allAgents = [];
+
+async function refresh() {
+  try {
+    const [status, agents, tasks, economy, realms] = await Promise.all([
+      fetchJSON('/api/status'),
+      fetchJSON('/api/agents?alive_only=false'),
+      fetchJSON('/api/tasks?limit=30'),
+      fetchJSON('/api/economy'),
+      fetchJSON('/api/realms'),
+    ]);
+    allAgents = agents;
+    renderStatus(status);
+    renderAgents(agents);
+    renderTasks(tasks);
+    renderEconomy(economy);
+    renderRealms(realms);
+  } catch (err) {
+    console.error('Refresh failed:', err);
+  }
+  countdown = refreshInterval / 1000;
+}
+
+// Countdown display
+setInterval(() => {
+  countdown = Math.max(0, countdown - 1);
+  document.getElementById('refresh-timer').textContent = countdown;
+}, 1000);
+
+// Initial + interval
+refresh();
+setInterval(refresh, refreshInterval);
+</script>
+</body>
+</html>

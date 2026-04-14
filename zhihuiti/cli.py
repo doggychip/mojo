@@ -108,6 +108,21 @@ def trade(ctx: click.Context, ticker: str, signals: int, top: int) -> None:
 
 
 @main.command()
+@click.option("--port", "-p", default=8420, help="Port to serve on")
+@click.option("--host", "-h", default="127.0.0.1", help="Host to bind to")
+def dashboard(port: int, host: str) -> None:
+    """Launch the web dashboard."""
+    import uvicorn
+
+    from .api import create_app
+
+    click.echo(f"\n智慧体 Dashboard starting at http://{host}:{port}")
+    click.echo("Press Ctrl+C to stop.\n")
+    app = create_app()
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+@main.command()
 @click.argument("agent_id")
 @click.pass_context
 def bloodline(ctx: click.Context, agent_id: str) -> None:
